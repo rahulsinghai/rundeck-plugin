@@ -1,9 +1,11 @@
 package org.jenkinsci.plugins.rundeck.client;
 
+import com.google.common.annotations.VisibleForTesting;
 import hudson.AbortException;
 import okhttp3.ResponseBody;
 import org.jenkinsci.plugins.rundeck.RundeckInstance;
 import org.rundeck.client.RundeckClient;
+import org.rundeck.client.RundeckClient.Builder;
 import org.rundeck.client.api.RundeckApi;
 import org.rundeck.client.api.model.*;
 import org.rundeck.client.api.model.scheduler.ScheduledJobItem;
@@ -23,12 +25,27 @@ public class RundeckClientManager implements RundeckManager {
     private RundeckInstance rundeckInstance;
     private Client<RundeckApi> client;
 
+    private Builder<RundeckApi> clientBuilder;
+
     public RundeckClientManager() {
     }
 
     public RundeckClientManager(RundeckInstance rundeckInstance) {
         this.rundeckInstance = rundeckInstance;
         buildClient();
+    }
+
+    private Builder<RundeckApi> createRundeckClientBuilder() {
+        if (clientBuilder != null) {
+            return clientBuilder;
+        } else {
+            return RundeckClient.builder();
+        }
+    }
+
+    @VisibleForTesting
+    protected void setRundeckClientBuilder(Builder<RundeckApi> builder) {
+        clientBuilder = builder;
     }
 
     public RundeckInstance getRundeckInstance() {
@@ -49,13 +66,15 @@ public class RundeckClientManager implements RundeckManager {
 
     public void buildClient(){
         if(client == null){
-            RundeckClient.Builder builder = RundeckClient.builder().baseUrl(rundeckInstance.getUrl());
+            Builder<RundeckApi> builder = createRundeckClientBuilder().baseUrl(rundeckInstance.getUrl());
 
-            if(rundeckInstance.getToken()!=null && !rundeckInstance.getToken().getPlainText().isEmpty()){
+            // Authentication: EITHER token OR username+password
+            if(rundeckInstance.getToken()!=null && !rundeckInstance.getToken().getPlainText().isEmpty()) {
                 builder.tokenAuth(rundeckInstance.getToken().getPlainText());
-            }
-            if(rundeckInstance.getLogin() != null && rundeckInstance.getPassword()!=null){
-                builder.passwordAuth(rundeckInstance.getLogin(),rundeckInstance.getPassword().getPlainText() );
+            } else if(rundeckInstance.getLogin() != null && rundeckInstance.getPassword()!=null && !rundeckInstance.getPassword().getPlainText().isEmpty()) {
+                builder.passwordAuth(rundeckInstance.getLogin(),rundeckInstance.getPassword().getPlainText());
+            } else {
+                throw new RuntimeException("No Rundeck authentication method provided");
             }
 
             if(rundeckInstance.getApiVersion()!=null){

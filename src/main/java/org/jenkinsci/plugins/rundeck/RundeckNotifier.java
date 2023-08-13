@@ -184,10 +184,11 @@ public class RundeckNotifier extends Notifier implements SimpleBuildStep {
      * @return true if we should notify Rundeck, false otherwise
      */
     private boolean shouldNotifyRundeck(@Nonnull Run<?, ?> build, @Nonnull TaskListener listener) {
-        String info = "Instance '" + this.getRundeckInstance() + "' with rundeck user '" + this.performUser + "': Notifying Rundeck...";
-
         if (tagsList.length == 0) {
-            listener.getLogger().println(info);
+            if(this.performUser != null && !this.performUser.trim().isEmpty())
+                listener.getLogger().println("Instance '" + this.getRundeckInstance() + "' with rundeck user '" + this.performUser + "'. Notifying Rundeck...");
+            else
+                listener.getLogger().println("Instance '" + this.getRundeckInstance() + "' with token configured. Notifying Rundeck...");
             return true;
         }
 
@@ -608,7 +609,7 @@ public class RundeckNotifier extends Notifier implements SimpleBuildStep {
 
             CopyOnWriteList<RundeckInstance> newInstances = new CopyOnWriteList<RundeckInstance>();
             newInstances.replaceBy(req.bindJSONToList(RundeckInstance.class, json.get("rundeckInstances")));
-            this.setRundeckInstances(newInstances.toArray(new RundeckInstance[0]));
+            this.setRundeckInstances(newInstances.toArray(new RundeckInstance[newInstances.size()]));
             configureRundeckJobCache(json);
 
             save();
@@ -844,22 +845,17 @@ public class RundeckNotifier extends Notifier implements SimpleBuildStep {
         }
 
 
-            /**
-             * get RundeckClient if optional user is given
-             * @param rundeckInstanceName rundeck instance
-             * @param jobUser job user
-             * @param jobPassword job user password
-             * @param jobToken job  token
-             * @return RundeckManager rundeck Manager result
-             */
+        /**
+         * get RundeckClient if optional user is given
+         * @param rundeckInstanceName rundeck instance
+         * @param jobUser job user
+         * @param jobPassword job user password
+         * @param jobToken job  token
+         * @return RundeckManager rundeck Manager result
+         */
         public RundeckManager getRundeckJobInstance(String rundeckInstanceName,
-                                                   String jobUser, String jobPassword, String jobToken) {
-            RundeckInstance instance = null;
-            for(RundeckInstance eachInstance: rundeckInstances) {
-                if(eachInstance.getName().equals(rundeckInstanceName))
-                    instance = eachInstance; 
-            }
-
+                                                    String jobUser, String jobPassword, String jobToken) {
+            RundeckInstance instance = getRundeckInstance(rundeckInstanceName);
             if(instance==null){
                 return null;
             }
@@ -870,7 +866,7 @@ public class RundeckNotifier extends Notifier implements SimpleBuildStep {
             }
 
             if(rundeckBuilder.getClient()==null){
-                client = rundeckBuilder.createClient(instance);
+                client = RundeckInstanceBuilder.createClient(instance);
             }else{
                 client = rundeckBuilder.getClient();
             }
